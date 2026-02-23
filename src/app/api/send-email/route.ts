@@ -74,6 +74,9 @@ export async function POST(req: NextRequest) {
 }
 
 async function generateChecklist(resignationId: string, resignationDate: Date) {
+  const existing = await prisma.checklistItem.count({ where: { resignationId } });
+  if (existing > 0) return;
+
   const items = [
     {
       title: "健康保険の切替手続き",

@@ -42,7 +42,8 @@ export async function POST(req: NextRequest) {
         },
       ],
       mode: "payment",
-      success_url: `${baseUrl}/dashboard?paid=true&id=${resignationId}`,
+      // 支払い完了後はpreviewページに戻り、実際の送信を行う
+      success_url: `${baseUrl}/resign/preview?id=${resignationId}&method=${resignation.sendMethod}&paid=true`,
       cancel_url: `${baseUrl}/resign/preview?id=${resignationId}&method=${resignation.sendMethod}`,
       metadata: {
         resignationId,

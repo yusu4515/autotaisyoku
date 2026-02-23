@@ -10,10 +10,15 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const { resignationId, subject, body, gmailToken } = await req.json();
+    const { resignationId, subject, body } = await req.json();
 
-    if (!gmailToken) {
-      return NextResponse.json({ error: "Gmail認証情報がありません。再度OAuth連携してください。" }, { status: 400 });
+    // HttpOnly CookieからGmailトークンを読み取る
+    const gmailTokenCookie = req.cookies.get("gmail_oauth_token");
+    if (!gmailTokenCookie?.value) {
+      return NextResponse.json(
+        { error: "Gmail認証情報がありません。再度OAuth連携してください。" },
+        { status: 400 }
+      );
     }
 
     const resignation = await prisma.resignation.findFirst({
@@ -28,7 +33,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "お支払いが完了していません。" }, { status: 402 });
     }
 
-    const tokenData = JSON.parse(Buffer.from(gmailToken, "base64").toString());
+    const tokenData = JSON.parse(gmailTokenCookie.value);
 
     await sendGmailWithOAuth({
       accessToken: tokenData.accessToken,
@@ -50,10 +55,12 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    // 退職後チェックリスト生成
     await generateChecklist(resignationId, resignation.resignationDate);
 
-    return NextResponse.json({ success: true });
+    // 使用済みトークンを削除
+    const response = NextResponse.json({ success: true });
+    response.cookies.delete("gmail_oauth_token");
+    return response;
   } catch (error) {
     console.error("Gmail OAuth send error:", error);
     return NextResponse.json({ error: "Gmail送信に失敗しました。" }, { status: 500 });
@@ -61,6 +68,9 @@ export async function POST(req: NextRequest) {
 }
 
 async function generateChecklist(resignationId: string, resignationDate: Date) {
+  const existing = await prisma.checklistItem.count({ where: { resignationId } });
+  if (existing > 0) return;
+
   const items = [
     { title: "健康保険の切替手続き", description: "国民健康保険への加入または任意継続保険の申請。退職後14日以内。", category: "社会保険", daysAfter: 1 },
     { title: "年金の種別変更", description: "市区町村役場で国民年金への切替手続き。退職後14日以内が望ましい。", category: "社会保険", daysAfter: 3 },
@@ -68,9 +78,6 @@ async function generateChecklist(resignationId: string, resignationDate: Date) {
     { title: "源泉徴収票の受け取り確認", description: "会社から退職後1ヶ月以内に発行されます。確定申告に必要。", category: "税金", daysAfter: 30 },
     { title: "確定申告", description: "退職した年は自分で確定申告が必要。翌年2〜3月が申告期間。", category: "税金", daysAfter: 180 },
   ];
-
-  const existing = await prisma.checklistItem.count({ where: { resignationId } });
-  if (existing > 0) return;
 
   await prisma.checklistItem.createMany({
     data: items.map((item) => ({

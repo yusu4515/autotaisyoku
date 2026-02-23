@@ -4,13 +4,11 @@ import { useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { cn } from "@/lib/utils";
-import { ArrowLeft, ArrowRight, Star, ShieldCheck, Copy, Lock, AlertCircle } from "lucide-react";
+import { ArrowLeft, ArrowRight, Star, ShieldCheck, Copy, AlertCircle } from "lucide-react";
 
 type SendMethod = "SMTP" | "OAUTH" | "COPY_PASTE";
 
@@ -50,7 +48,6 @@ function MethodPageInner() {
   const resignationId = searchParams.get("id");
 
   const [method, setMethod] = useState<SendMethod>("SMTP");
-  const [smtpPassword, setSmtpPassword] = useState("");
   const [scheduledAt, setScheduledAt] = useState("");
   const [sendTiming, setSendTiming] = useState<"now" | "scheduled">("now");
   const [isLoading, setIsLoading] = useState(false);
@@ -149,35 +146,18 @@ function MethodPageInner() {
           ))}
         </div>
 
-        {/* SMTPパスワード入力 */}
+        {/* SMTPモードの説明 */}
         {method === "SMTP" && (
           <Card className="mb-6">
-            <CardContent className="p-5 space-y-4">
-              <div className="flex items-center gap-2 text-sm font-semibold text-stone-700">
-                <Lock className="h-4 w-4 text-emerald-600" />
-                SMTPパスワード入力
-              </div>
+            <CardContent className="p-5">
               <Alert variant="warn">
                 <AlertCircle className="h-4 w-4" />
                 <AlertDescription className="text-xs">
                   Gmailの場合は「アプリパスワード」を使用してください。
                   通常のGoogleパスワードではなく、2段階認証後に発行できる16桁のパスワードです。
+                  パスワードは次の確認画面で入力します。
                 </AlertDescription>
               </Alert>
-              <div className="space-y-2">
-                <Label htmlFor="smtpPassword">メールパスワード（アプリパスワード）</Label>
-                <Input
-                  id="smtpPassword"
-                  type="password"
-                  placeholder="••••••••••••••••"
-                  value={smtpPassword}
-                  onChange={(e) => setSmtpPassword(e.target.value)}
-                />
-                <p className="text-xs text-stone-400 flex items-center gap-1">
-                  <Lock className="h-3 w-3" />
-                  SSL暗号化済み。送信完了後に即時削除します。
-                </p>
-              </div>
             </CardContent>
           </Card>
         )}

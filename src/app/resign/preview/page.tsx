@@ -2,18 +2,32 @@
 
 import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Textarea } from "@/components/ui/textarea";
-import { ArrowLeft, Send, Copy, CheckCircle, Loader2, RefreshCw, AlertCircle } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  ArrowLeft,
+  Send,
+  Copy,
+  CheckCircle,
+  Loader2,
+  RefreshCw,
+  AlertCircle,
+  Lock,
+  ShieldCheck,
+} from "lucide-react";
 
 function PreviewPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const resignationId = searchParams.get("id");
   const method = searchParams.get("method");
+  const isPaid = searchParams.get("paid") === "true";
 
   const [isGenerating, setIsGenerating] = useState(true);
   const [isSending, setIsSending] = useState(false);
@@ -22,6 +36,8 @@ function PreviewPageInner() {
   const [emailBody, setEmailBody] = useState("");
   const [letterBody, setLetterBody] = useState("");
   const [error, setError] = useState("");
+  const [smtpPassword, setSmtpPassword] = useState("");
+  const [sendSuccess, setSendSuccess] = useState(false);
 
   useEffect(() => {
     if (!resignationId) return;
@@ -58,20 +74,56 @@ function PreviewPageInner() {
   async function handleSend() {
     if (!resignationId) return;
     setIsSending(true);
+    setError("");
+
     try {
-      const res = await fetch("/api/send-email", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          resignationId,
-          subject: emailSubject,
-          body: emailBody,
-        }),
-      });
-      if (!res.ok) throw new Error();
-      router.push(`/dashboard?sent=true&id=${resignationId}`);
-    } catch {
-      setError("送信に失敗しました。もう一度お試しください。");
+      if (method === "OAUTH") {
+        // OAuthはCookieのトークンを使ってサーバー側で送信
+        const res = await fetch("/api/send-email-oauth", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            resignationId,
+            subject: emailSubject,
+            body: emailBody,
+          }),
+        });
+        if (!res.ok) {
+          const data = await res.json();
+          if (data.error?.includes("Gmail認証情報")) {
+            setError("Gmail認証の有効期限が切れました。再度OAuth連携してください。");
+            setIsSending(false);
+            return;
+          }
+          throw new Error(data.error || "送信失敗");
+        }
+      } else if (method === "SMTP") {
+        if (!smtpPassword) {
+          setError("メールパスワード（アプリパスワード）を入力してください。");
+          setIsSending(false);
+          return;
+        }
+        const res = await fetch("/api/send-email", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            resignationId,
+            subject: emailSubject,
+            body: emailBody,
+            smtpPassword,
+          }),
+        });
+        if (!res.ok) {
+          const data = await res.json();
+          throw new Error(data.error || "送信失敗");
+        }
+      }
+
+      setSendSuccess(true);
+      setTimeout(() => router.push(`/dashboard?sent=true&id=${resignationId}`), 2000);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "送信に失敗しました。";
+      setError(msg || "送信に失敗しました。もう一度お試しください。");
       setIsSending(false);
     }
   }
@@ -104,21 +156,41 @@ function PreviewPageInner() {
       </header>
 
       <div className="mx-auto max-w-2xl px-4 py-8 space-y-6">
-        {/* 先輩の励まし */}
+        {/* メッセージ */}
         <div className="flex items-start gap-3">
           <div className="flex-shrink-0 w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center text-lg">
             👩‍💼
           </div>
           <div className="rounded-xl rounded-tl-none bg-white border border-stone-200 p-4 text-sm text-stone-700 shadow-sm">
-            AIが「角の立たない」退職通知メールを生成しました。
-            内容を確認して、必要であれば修正してください。問題なければ送信ボタンを押すだけです！
+            {isPaid
+              ? "お支払いありがとうございます！内容を確認して、送信ボタンを押してください。"
+              : "AIが「角の立たない」退職通知メールを生成しました。内容を確認して、問題なければ送信ボタンを押すだけです！"}
           </div>
         </div>
+
+        {/* 支払い完了バナー */}
+        {isPaid && (
+          <Alert className="border-emerald-200 bg-emerald-50">
+            <CheckCircle className="h-4 w-4 text-emerald-600" />
+            <AlertDescription className="text-emerald-800 font-medium">
+              お支払いが完了しました。下のボタンでメールを送信してください。
+            </AlertDescription>
+          </Alert>
+        )}
 
         {error && (
           <Alert variant="destructive">
             <AlertCircle className="h-4 w-4" />
             <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
+
+        {sendSuccess && (
+          <Alert className="border-emerald-200 bg-emerald-50">
+            <CheckCircle className="h-4 w-4 text-emerald-600" />
+            <AlertDescription className="text-emerald-800">
+              送信が完了しました！ダッシュボードに移動します...
+            </AlertDescription>
           </Alert>
         )}
 
@@ -139,19 +211,10 @@ function PreviewPageInner() {
               <CardHeader className="flex flex-row items-center justify-between pb-3">
                 <CardTitle className="text-base">退職通知メール</CardTitle>
                 <div className="flex gap-2">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={generateEmail}
-                    title="再生成"
-                  >
+                  <Button variant="ghost" size="sm" onClick={generateEmail} title="再生成">
                     <RefreshCw className="h-4 w-4" />
                   </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleCopy}
-                  >
+                  <Button variant="outline" size="sm" onClick={handleCopy}>
                     {copied ? (
                       <><CheckCircle className="mr-1 h-4 w-4 text-emerald-600" />コピー済み</>
                     ) : (
@@ -215,7 +278,7 @@ function PreviewPageInner() {
               </AlertDescription>
             </Alert>
 
-            {/* 送信ボタン */}
+            {/* 送信セクション */}
             <Card className="border-emerald-200 bg-emerald-50">
               <CardContent className="p-5">
                 <p className="text-sm font-semibold text-stone-900 mb-4">
@@ -247,19 +310,80 @@ function PreviewPageInner() {
                       ダッシュボードへ進む
                     </Button>
                   </div>
+                ) : isPaid ? (
+                  // 支払い済み → 実際に送信する
+                  <div className="space-y-4">
+                    {method === "SMTP" && (
+                      <div className="rounded-xl bg-white border border-stone-200 p-4 space-y-3">
+                        <div className="flex items-center gap-2 text-sm font-semibold text-stone-700">
+                          <Lock className="h-4 w-4 text-emerald-600" />
+                          メールパスワード（アプリパスワード）
+                        </div>
+                        <p className="text-xs text-stone-500">
+                          Gmailの場合は「アプリパスワード」を入力してください。通常のパスワードではなく、
+                          2段階認証後に発行できる16桁のパスワードです。
+                        </p>
+                        <div className="space-y-1.5">
+                          <Label htmlFor="smtpPassword" className="text-sm font-medium text-stone-700">
+                            アプリパスワード
+                          </Label>
+                          <Input
+                            id="smtpPassword"
+                            type="password"
+                            placeholder="••••••••••••••••"
+                            value={smtpPassword}
+                            onChange={(e) => setSmtpPassword(e.target.value)}
+                            className="h-11"
+                          />
+                        </div>
+                        <div className="flex items-center gap-1.5 text-xs text-stone-400">
+                          <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" />
+                          SSL暗号化済み。送信完了後に即時削除します。
+                        </div>
+                      </div>
+                    )}
+
+                    {method === "OAUTH" && (
+                      <div className="rounded-xl bg-white border border-stone-200 p-4 text-sm text-stone-600">
+                        <p className="flex items-center gap-2">
+                          <ShieldCheck className="h-4 w-4 text-emerald-600 flex-shrink-0" />
+                          Gmail認証済みです。送信ボタンを押してください。
+                        </p>
+                        <p className="mt-2 text-xs text-stone-400">
+                          ※ 認証の有効期限が切れた場合は
+                          <Link href={`/resign/method?id=${resignationId}`} className="text-emerald-600 hover:underline ml-1">
+                            再度OAuth連携
+                          </Link>
+                          してください。
+                        </p>
+                      </div>
+                    )}
+
+                    <Button
+                      className="w-full h-11 bg-emerald-600 hover:bg-emerald-700"
+                      size="lg"
+                      onClick={handleSend}
+                      disabled={isSending || sendSuccess}
+                    >
+                      {isSending ? (
+                        <><Loader2 className="mr-2 h-5 w-5 animate-spin" />送信中...</>
+                      ) : sendSuccess ? (
+                        <><CheckCircle className="mr-2 h-5 w-5" />送信完了！</>
+                      ) : (
+                        <><Send className="mr-2 h-5 w-5" />退職通知メールを送信する</>
+                      )}
+                    </Button>
+                  </div>
                 ) : (
+                  // 未払い → Stripe決済へ
                   <div className="space-y-3">
                     <Button
                       className="w-full"
                       size="lg"
                       onClick={handleStripeCheckout}
-                      disabled={isSending}
                     >
-                      {isSending ? (
-                        <><Loader2 className="mr-2 h-5 w-5 animate-spin" />送信中...</>
-                      ) : (
-                        <><Send className="mr-2 h-5 w-5" />¥3,000 支払って送信する</>
-                      )}
+                      <Send className="mr-2 h-5 w-5" />
+                      ¥3,000 支払って送信する
                     </Button>
                     <p className="text-xs text-center text-stone-500">
                       Stripeの安全な決済画面に移動します

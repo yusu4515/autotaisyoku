@@ -1,6 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { z } from "zod";
+
+const patchSchema = z.object({
+  sendMethod: z.enum(["SMTP", "OAUTH", "COPY_PASTE"]).optional(),
+  scheduledAt: z.string().nullable().optional(),
+  generatedEmail: z.string().optional(),
+  generatedSubject: z.string().optional(),
+  generatedLetter: z.string().optional(),
+  // status はクライアントから直接書き換え不可（send-email等のサーバーアクションのみで更新）
+});
 
 export async function PATCH(
   req: NextRequest,
@@ -15,6 +25,10 @@ export async function PATCH(
 
   try {
     const body = await req.json();
+    const parsed = patchSchema.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json({ error: "入力内容が正しくありません。" }, { status: 400 });
+    }
 
     const resignation = await prisma.resignation.findFirst({
       where: { id, userId: session.user.id },
@@ -24,17 +38,17 @@ export async function PATCH(
       return NextResponse.json({ error: "見つかりません。" }, { status: 404 });
     }
 
+    const data = parsed.data;
     const updated = await prisma.resignation.update({
       where: { id },
       data: {
-        ...(body.sendMethod && { sendMethod: body.sendMethod }),
-        ...(body.scheduledAt !== undefined && {
-          scheduledAt: body.scheduledAt ? new Date(body.scheduledAt) : null,
+        ...(data.sendMethod && { sendMethod: data.sendMethod }),
+        ...(data.scheduledAt !== undefined && {
+          scheduledAt: data.scheduledAt ? new Date(data.scheduledAt) : null,
         }),
-        ...(body.generatedEmail && { generatedEmail: body.generatedEmail }),
-        ...(body.generatedSubject && { generatedSubject: body.generatedSubject }),
-        ...(body.generatedLetter && { generatedLetter: body.generatedLetter }),
-        ...(body.status && { status: body.status }),
+        ...(data.generatedEmail && { generatedEmail: data.generatedEmail }),
+        ...(data.generatedSubject && { generatedSubject: data.generatedSubject }),
+        ...(data.generatedLetter && { generatedLetter: data.generatedLetter }),
       },
     });
 

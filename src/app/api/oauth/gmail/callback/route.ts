@@ -24,32 +24,33 @@ export async function GET(req: NextRequest) {
       throw new Error("アクセストークンが取得できませんでした。");
     }
 
-    // トークンを暗号化してDBに保存
-    // 本番ではAES-256-GCM等で暗号化することを推奨
-    // ここではシンプルにBase64エンコードのみ
     await prisma.resignation.update({
       where: { id: resignationId, userId },
-      data: {
-        sendMethod: "OAUTH",
-        // OAuthトークンはgeneratedEmail欄に一時保存（本来は専用カラムを追加すべき）
-        // 実運用ではOAuthTokenモデルを別途作成することを推奨
-      },
+      data: { sendMethod: "OAUTH" },
     });
 
-    // トークンをセッションストレージ相当のものに格納（簡易実装）
-    // 本番ではRedisやDBの専用テーブルを使う
-    const tokenData = Buffer.from(JSON.stringify({
+    // トークンをURLに含めず、HttpOnly Cookieに保存（10分間有効）
+    const tokenData = JSON.stringify({
       accessToken: tokens.access_token,
       refreshToken: tokens.refresh_token,
       expiryDate: tokens.expiry_date,
-    })).toString("base64");
+    });
 
     const redirectUrl = new URL(
-      `/resign/preview?id=${resignationId}&method=OAUTH&gmailToken=${tokenData}`,
+      `/resign/preview?id=${resignationId}&method=OAUTH&paid=pending`,
       process.env.NEXTAUTH_URL!
     );
 
-    return NextResponse.redirect(redirectUrl);
+    const response = NextResponse.redirect(redirectUrl);
+    response.cookies.set("gmail_oauth_token", tokenData, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      maxAge: 600, // 10分
+      path: "/",
+    });
+
+    return response;
   } catch (err) {
     console.error("Gmail OAuth callback error:", err);
     return NextResponse.redirect(
