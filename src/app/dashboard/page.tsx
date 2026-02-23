@@ -18,6 +18,7 @@ import {
   Plus,
   ExternalLink,
   Clock,
+  Download,
 } from "lucide-react";
 
 const LEGAL_KEYWORDS_COLUMNS: Record<string, { title: string; desc: string; link: string }> = {
@@ -213,7 +214,27 @@ function DashboardContent() {
             <div className="lg:col-span-3">
               {resignations.find((r) => r.id === resignationId)?.replies.length ? (
                 <div className="space-y-4">
-                  <h2 className="font-bold text-stone-900">会社からの返信</h2>
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <h2 className="font-bold text-stone-900">会社からの返信</h2>
+                    <div className="flex gap-2">
+                      {resignationId && (
+                        <a href={`/api/certificate?id=${resignationId}`} download>
+                          <Button size="sm" variant="ghost" className="text-stone-400 hover:text-stone-700">
+                            <Download className="mr-1.5 h-3.5 w-3.5" />
+                            送信証明書
+                          </Button>
+                        </a>
+                      )}
+                      {resignationId && (
+                        <Link href={`/dashboard/add-reply?id=${resignationId}`}>
+                          <Button size="sm" variant="outline">
+                            <Plus className="mr-1.5 h-3.5 w-3.5" />
+                            返信を登録
+                          </Button>
+                        </Link>
+                      )}
+                    </div>
+                  </div>
                   <div className="space-y-4">
                     {resignations
                       .find((r) => r.id === resignationId)
@@ -363,14 +384,20 @@ function DashboardContent() {
               ) : resignationId ? (
                 <Card>
                   <CardContent className="flex items-center justify-center py-16">
-                    <div className="text-center space-y-3">
+                    <div className="text-center space-y-4">
                       <Clock className="mx-auto h-10 w-10 text-stone-300" />
                       <p className="font-semibold text-stone-700">返信待ち中</p>
                       <p className="text-sm text-stone-400">
-                        会社から返信が届くとここに表示されます。
+                        会社から返信が届いたら、下のボタンから登録してください。
                         <br />
                         感情を除去した「事実だけの要約」でお届けします。
                       </p>
+                      <Link href={`/dashboard/add-reply?id=${resignationId}`}>
+                        <Button variant="outline" size="sm">
+                          <Mail className="mr-1.5 h-4 w-4" />
+                          返信メールを貼り付けて登録
+                        </Button>
+                      </Link>
                     </div>
                   </CardContent>
                 </Card>
