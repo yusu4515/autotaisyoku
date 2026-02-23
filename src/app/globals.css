@@ -1,0 +1,43 @@
+@import "tailwindcss";
+
+:root {
+  --background: #fafaf9;
+  --foreground: #1c1917;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-noto-sans-jp);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-noto-sans-jp), "Noto Sans JP", sans-serif;
+}
+
+/* ステップ進捗アニメーション */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fadeInUp {
+  animation: fadeInUp 0.4s ease-out;
+}
+
+/* 選択オプションホバー */
+.option-card {
+  @apply cursor-pointer rounded-xl border-2 border-stone-200 p-4 transition-all hover:border-emerald-400 hover:bg-emerald-50;
+}
+
+.option-card.selected {
+  @apply border-emerald-500 bg-emerald-50;
+}
