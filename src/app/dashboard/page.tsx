@@ -86,7 +86,7 @@ function DashboardContent() {
     try {
       const res = await fetch("/api/resignations");
       const data = await res.json();
-      setResignations(data);
+      setResignations(Array.isArray(data) ? data : []);
     } catch {
       console.error("Failed to fetch resignations");
     } finally {
